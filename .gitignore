@@ -11,3 +11,14 @@
 *.lai
 *.la
 *.a
+*.gitattributes
+*.opensdf
+*.suo
+*.tlog
+*.lastbuildstate
+*.log
+*.obj
+*.idb
+*.pdb
+*.exe
+*.ilk

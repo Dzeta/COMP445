@@ -18,11 +18,14 @@ In the client,issuse "client sd2.encs.concordia.ca test.txt time" and you can ge
 #define FILENAME_LENGTH 20
 #define REQUEST_PORT 5001
 #define BUFFER_LENGTH 1024 
+#define CMD_LENGTH 20
 #define TRACE 0
 #define MSGHDRSIZE 8 //Message Header Size
 
+using namespace std;
+
 typedef enum{
-	REQ_SIZE=1,REQ_TIME,RESP //Message type
+	REQ_GET=1,REQ_PUT,REQ_LIST,RESP //Message type
 } Type;
 
 typedef struct  
@@ -56,7 +59,7 @@ class TcpClient
 	WSADATA wsadata;
 public:
 	TcpClient(){}
-	void run(int argc,char * argv[]);	
+	void run();	
 	~TcpClient();
     int msg_recv(int ,Msg * );
 	int msg_send(int ,Msg * );
@@ -65,10 +68,11 @@ public:
 
 };
 
-void TcpClient::run(int argc,char * argv[])
+void TcpClient::run()
 {
-	if (argc != 4)
-        err_sys("usage: client servername filename size/time");
+	char serverName[HOSTNAME_LENGTH];
+	char fileName[FILENAME_LENGTH];
+	char cmd[CMD_LENGTH];
 	
 	//initilize winsocket
 	if (WSAStartup(0x0202,&wsadata)!=0)
@@ -81,14 +85,25 @@ void TcpClient::run(int argc,char * argv[])
 	//Display name of local host and copy it to the req
 	if(gethostname(req.hostname,HOSTNAME_LENGTH)!=0) //get the hostname
 		err_sys("can not get the host name,program exit");
-	printf("%s%s\n","Client starting at host:",req.hostname);
-		
-	strcpy_s(req.filename, FILENAME_LENGTH, argv[2]);
+	printf("ftp_tcp starting on host: %s\n",req.hostname);
 
-	if(strcmp(argv[3],"time")==0)
-		smsg.type=REQ_TIME;
-	else if (strcmp(argv[3],"size")==0)
-		smsg.type=REQ_SIZE;
+	printf("Type name of ftp server: ");
+	cin >> serverName;
+
+	printf("\nType name of file to be transferred:  ");
+	cin >> fileName;
+
+	printf("\nType direction of transfer: ");
+	cin >> cmd;
+		
+	strcpy_s(req.filename, FILENAME_LENGTH, fileName);
+
+	if(strcmp(cmd,"get")==0)
+		smsg.type=REQ_GET;
+	else if (strcmp(cmd,"put")==0)
+		smsg.type=REQ_PUT;
+	else if (strcmp(cmd,"list")==0)
+		smsg.type=REQ_LIST;
 	else err_sys("Wrong request type\n");
 		//Create the socket
 	if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) //create the socket 
@@ -98,7 +113,7 @@ void TcpClient::run(int argc,char * argv[])
 	ServPort=REQUEST_PORT;
 	memset(&ServAddr, 0, sizeof(ServAddr));     /* Zero out structure */
 	ServAddr.sin_family      = AF_INET;             /* Internet address family */
-	ServAddr.sin_addr.s_addr = ResolveName(argv[1]);   /* Server IP address */
+	ServAddr.sin_addr.s_addr = ResolveName(serverName);   /* Server IP address */
 	ServAddr.sin_port        = htons(ServPort); /* Server port */
 	if (connect(sock, (struct sockaddr *) &ServAddr, sizeof(ServAddr)) < 0)
 			err_sys("Socket Creating Error");
@@ -106,9 +121,10 @@ void TcpClient::run(int argc,char * argv[])
     //send out the message
 	memcpy(smsg.buffer,&req,sizeof(req)); //copy the request to the msg's buffer
 	smsg.length=sizeof(req);
-	fprintf(stdout,"Send reqest to %s\n",argv[1]);
     if (msg_send(sock,&smsg) != sizeof(req))
 			err_sys("Sending req packet error.,exit");
+
+	printf("\nSent request to %s, waiting...", serverName);
 
 	//receive the response
 	if(msg_recv(sock,&rmsg)!=rmsg.length)
@@ -116,12 +132,37 @@ void TcpClient::run(int argc,char * argv[])
 
 	//cast it to the response structure
 	respp=(Resp *)rmsg.buffer;
-	printf("Response:%s\n\n\n",respp->response);
+	if(strcmp(respp->response, "No such a file") == 0) 
+	{
+		// File does not exist
+		printf("%s\n", respp->response);
+	}
+	else if(strcmp(respp->response, "READY") == 0) 
+	{
+		// Send the file size / file
+	}
+	else 
+	{
+		// Get the file
+		int fileSize = atoi(respp->response);
+
+		smsg.type = RESP;
+		strcpy_s(smsg.buffer, BUFFER_LENGTH, "READY");
+		smsg.length = sizeof("READY");
+		
+		if (msg_send(sock,&smsg) != sizeof("READY"))
+			err_sys("Sending req packet error.,exit");
+
+		// Start receiving the file
+		// TODO
+	}
+		
 
 	//close the client socket
 	closesocket(sock);
 
 }
+
 TcpClient::~TcpClient()
 {
 	/* When done uninstall winsock.dll (WSACleanup()) and exit */ 
@@ -184,9 +225,8 @@ int TcpClient::msg_send(int sock,Msg * msg_ptr)
 int main(int argc, char *argv[]) //argv[1]=servername argv[2]=filename argv[3]=time/size
 {
 	
-	
-	
 	TcpClient * tc=new TcpClient();
-	tc->run(argc,argv);
+	tc->run();
+	while(1);
 	return 0;
 }

@@ -27,7 +27,8 @@ TcpServer::TcpServer()
 	if(gethostname(servername,HOSTNAME_LENGTH)!=0) //get the hostname
 		TcpThread::err_sys("Get the host name error,exit");
 	
-	printf("Server: %s waiting to be contacted for time/size request...\n",servername);
+	printf("ftpd_tcp starting at host: [%s]\n"
+		   "waiting to be contacted for transferring files...\n",servername);
 	
 	
 	//Create the server socket
@@ -133,13 +134,17 @@ void TcpThread::run() //cs: Server socket
 	Msg smsg,rmsg; //send_message receive_message
 	struct _stat stat_buf;
     int result;
+
+	Type type;
 	
+
 	if(msg_recv(cs,&rmsg)!=rmsg.length)
 		err_sys("Receive Req error,exit");
-	
+
 	//cast it to the request packet structure		
 	reqp=(Req *)rmsg.buffer;
-	printf("Receive a request from client:%s\n",reqp->hostname);
+	printf("User from %s requested file %s to be sent.", reqp->hostname, reqp->filename);
+	
 	//contruct the response and send it out
 	smsg.type=RESP;
 	smsg.length=sizeof(Resp);
@@ -148,17 +153,38 @@ void TcpThread::run() //cs: Server socket
 		sprintf_s(resp.response, RESP_LENGTH, "No such a file");
 	else {	
 		memset(resp.response,0,sizeof(resp));
-		if(rmsg.type==REQ_TIME)
-			//sprintf_s(resp.response, RESP_LENGTH,"%s", ctime(&stat_buf.st_ctime ));
-		if(rmsg.type==REQ_SIZE)
+		type = rmsg.type;
+		if(rmsg.type==REQ_GET) 
 			sprintf_s(resp.response, RESP_LENGTH,"File size:%ld",stat_buf.st_size );
+		else if(rmsg.type==REQ_PUT)
+			sprintf_s(resp.response, RESP_LENGTH,"READY",stat_buf.st_size );
+		else if(rmsg.type==REQ_LIST)
+			sprintf_s(resp.response, RESP_LENGTH,"TODO: LIST",stat_buf.st_size );
 	}		
 	
 	memcpy(smsg.buffer,&resp,sizeof(resp));
-	
+	// Send the file size if cmd is GET, READY if cmd is PUT and the list of available files if cmd is LIST
 	if(msg_send(cs,&smsg)!=smsg.length)
 		err_sys("send Respose failed,exit");
-	printf("Response for %s has been sent out \n\n\n",reqp->hostname);
+	
+	switch (type)
+	{
+	case REQ_GET:
+		if(msg_recv(cs,&rmsg)!=rmsg.length)
+			err_sys("Receive Req error,exit");
+
+		if(strcmp(rmsg.buffer, "READY") == 0) {
+			// start sending the file
+			// TODO
+		}
+		break;
+	case REQ_PUT:
+			// Deal with size / receive the file
+		break;
+	default:
+		break;
+	}
+
 	
 	closesocket(cs);
 }

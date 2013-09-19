@@ -11,7 +11,7 @@
 
 
 typedef enum{
-	REQ_SIZE=1,REQ_TIME,RESP //Message type
+	REQ_GET=1,REQ_PUT,REQ_LIST,RESP  //Message type
 } Type;
 
 typedef struct  
