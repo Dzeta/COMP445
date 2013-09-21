@@ -152,9 +152,22 @@ void TcpClient::run()
 		
 		if (msg_send(sock,&smsg) != sizeof("READY"))
 			err_sys("Sending req packet error.,exit");
-
+		
 		// Start receiving the file
-		// TODO
+		if(msg_recv(sock,&rmsg)!=rmsg.length)
+			err_sys("recv response error,exit");
+		else{
+			respp=(Resp *)rmsg.buffer;
+			FILE * pFile;
+			pFile = fopen(fileName,"wb");
+			if (pFile!=NULL){
+				fputs(respp->response, pFile);
+			}
+			else{
+				printf("Cannot create file on client %s", fileName);
+			}
+		}
+
 	}
 		
 

@@ -134,7 +134,8 @@ void TcpThread::run() //cs: Server socket
 	Msg smsg,rmsg; //send_message receive_message
 	struct _stat stat_buf;
     int result;
-
+	char buff[1024];
+	char str[1024];
 	Type type;
 	
 
@@ -173,7 +174,22 @@ void TcpThread::run() //cs: Server socket
 		if(msg_recv(cs,&rmsg)!=rmsg.length)
 			err_sys("Receive Req error,exit");
 
-		if(strcmp(rmsg.buffer, "READY") == 0) {
+		if(strcmp(rmsg.buffer, "READY") == 0) {			
+			FILE * pFile;
+			pFile = fopen(reqp->filename,"rb");
+			if (pFile!=NULL){
+				while(fgets(buff, 1024, pFile)!=NULL){
+					
+				}
+					memcpy(smsg.buffer, buff,sizeof(*buff));
+					
+					if(msg_send(cs,&smsg)!=smsg.length)
+						err_sys("send Respose failed,exit");				
+			}
+			else{
+				printf("\ncannot open file %s", reqp->filename);
+			}
+  
 			// start sending the file
 			// TODO
 		}
