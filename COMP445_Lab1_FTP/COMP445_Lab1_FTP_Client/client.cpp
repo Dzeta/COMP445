@@ -73,7 +73,12 @@ void TcpClient::run()
 	char serverName[HOSTNAME_LENGTH];
 	char fileName[FILENAME_LENGTH];
 	char cmd[CMD_LENGTH];
-	
+	char* buffer;
+	long lSize;
+	size_t fileSize;
+	int result;
+	char resultSet[100];
+	char* pch;
 	//initilize winsocket
 	if (WSAStartup(0x0202,&wsadata)!=0)
 	{  
@@ -124,7 +129,7 @@ void TcpClient::run()
     if (msg_send(sock,&smsg) != sizeof(req))
 			err_sys("Sending req packet error.,exit");
 
-	printf("\nSent request to %s, waiting...", serverName);
+	printf("\nSent request to %s, waiting...\n", serverName);
 
 	//receive the response
 	if(msg_recv(sock,&rmsg)!=rmsg.length)
@@ -135,11 +140,74 @@ void TcpClient::run()
 	if(strcmp(respp->response, "No such a file") == 0) 
 	{
 		// File does not exist
-		printf("%s\n", respp->response);
+		printf("\n%s\n", respp->response);
 	}
-	else if(strcmp(respp->response, "READY") == 0) 
+	else if(strcmp(respp->response, "OK") == 0) 
 	{
-		// Send the file size / file
+
+		printf("Start sending the file%sto server%s", fileName,serverName);
+
+		FILE * pFile;
+		pFile = fopen(fileName,"rb");
+		if (pFile!=NULL){
+			fseek (pFile , 0 , SEEK_END);
+			lSize = ftell (pFile);
+			rewind (pFile);
+			buffer = (char*) malloc (sizeof(char)*lSize);
+
+			if (buffer != NULL){
+				result = fread (buffer,1,lSize,pFile);
+				if (result == lSize){
+					smsg.type = RESP;
+					strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+					smsg.length = sizeof(buffer);
+
+					if (msg_send(sock,&smsg) != sizeof(buffer))
+						err_sys("Sending req packet error.,exit");
+
+					if(msg_recv(sock,&rmsg)!=rmsg.length)
+						err_sys("Receive Req error,exit");
+
+					respp=(Resp *)rmsg.buffer;
+					if(strcmp(respp->response, "Got the file") == 0) 
+						printf("File sent to the Server %s", "successfully!");
+					
+
+				}
+				else{
+					printf("\nUnable to read from file: %s", fileName);
+				}
+			}
+			else{
+				printf("\nUnable to allocate memory for file: %s", fileName);
+			}
+
+		}
+		else{
+			printf("\ncannot open file %s", fileName);
+		}	
+		
+	}
+	else if(strcmp(respp->response, "List files") == 0){
+		smsg.type = RESP;
+		strcpy_s(smsg.buffer, BUFFER_LENGTH, "READY");
+		smsg.length = sizeof("READY");
+		
+		if (msg_send(sock,&smsg) != sizeof("READY"))
+			err_sys("Sending req packet error.,exit");
+		
+		// Start receiving the file
+		if(msg_recv(sock,&rmsg)!=rmsg.length)
+			err_sys("recv response error,exit");
+		printf("\nList all the files from server %s\n", serverName);
+		strcpy(resultSet, rmsg.buffer);
+		pch =strtok(resultSet, ",");
+		//cout<<resultSet<<endl;
+		while (pch != NULL)
+		{
+			printf ("\n%s\n",pch);
+			pch = strtok (NULL, ",");
+		}
 	}
 	else 
 	{
@@ -152,9 +220,32 @@ void TcpClient::run()
 		
 		if (msg_send(sock,&smsg) != sizeof("READY"))
 			err_sys("Sending req packet error.,exit");
-
+		
 		// Start receiving the file
-		// TODO
+		if(msg_recv(sock,&rmsg)!=rmsg.length)
+			err_sys("recv response error,exit");
+		else{
+			respp=(Resp *)rmsg.buffer;
+			FILE * pFile;
+			pFile = fopen(fileName,"wb");
+			if (pFile!=NULL){
+				fputs(respp->response, pFile);
+				fclose(pFile);
+				smsg.type = RESP;
+				strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
+				smsg.length = sizeof("Got the file");
+
+				if (msg_send(sock,&smsg) != sizeof("Got the file"))
+					err_sys("Sending req packet error.,exit");
+				
+				printf("Finish downloading the file: %s", fileName);
+				
+			}
+			else{
+				printf("Cannot create file on client %s", fileName);
+			}
+		}
+
 	}
 		
 
