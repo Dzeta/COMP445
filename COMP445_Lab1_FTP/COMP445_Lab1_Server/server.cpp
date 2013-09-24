@@ -16,7 +16,9 @@ In the Server,issuse "Server sd2.encs.concordia.ca test.txt time" and you can ge
 #include <process.h>
 #include "Thread.h"
 #include "server.h"
-
+#include <dirent.h>
+#include <vector>
+using namespace std;
 TcpServer::TcpServer()
 {
 	WSADATA wsadata;
@@ -134,58 +136,165 @@ void TcpThread::run() //cs: Server socket
 	Msg smsg,rmsg; //send_message receive_message
 	struct _stat stat_buf;
     int result;
-
 	Type type;
-	
-
+	DIR*     dir;
+    dirent*  pdir;
+	char* buffer;
+	long lSize;
+	size_t fileSize;
+	char* txtFile;
+	char fileList[100] ={0};	
 	if(msg_recv(cs,&rmsg)!=rmsg.length)
 		err_sys("Receive Req error,exit");
 
 	//cast it to the request packet structure		
-	reqp=(Req *)rmsg.buffer;
-	printf("User from %s requested file %s to be sent.", reqp->hostname, reqp->filename);
-	
+	reqp=(Req *)rmsg.buffer;	
+	type = rmsg.type;
 	//contruct the response and send it out
 	smsg.type=RESP;
 	smsg.length=sizeof(Resp);
-	
-	if((result = _stat(reqp->filename,&stat_buf))!=0)
-		sprintf_s(resp.response, RESP_LENGTH, "No such a file");
-	else {	
-		memset(resp.response,0,sizeof(resp));
-		type = rmsg.type;
-		if(rmsg.type==REQ_GET) 
-			sprintf_s(resp.response, RESP_LENGTH,"File size:%ld",stat_buf.st_size );
-		else if(rmsg.type==REQ_PUT)
-			sprintf_s(resp.response, RESP_LENGTH,"READY",stat_buf.st_size );
-		else if(rmsg.type==REQ_LIST)
-			sprintf_s(resp.response, RESP_LENGTH,"TODO: LIST",stat_buf.st_size );
-	}		
-	
-	memcpy(smsg.buffer,&resp,sizeof(resp));
-	// Send the file size if cmd is GET, READY if cmd is PUT and the list of available files if cmd is LIST
-	if(msg_send(cs,&smsg)!=smsg.length)
-		err_sys("send Respose failed,exit");
-	
+	memset(resp.response,0,sizeof(resp));
+
 	switch (type)
 	{
 	case REQ_GET:
-		if(msg_recv(cs,&rmsg)!=rmsg.length)
+		printf("User from %s requested file %s to be sent.", reqp->hostname, reqp->filename);
+		
+		if((result = _stat(reqp->filename,&stat_buf))!=0){
+			sprintf_s(resp.response, RESP_LENGTH, "No such a file");
+			memcpy(smsg.buffer,&resp,sizeof(resp));
+			// Send the file size if cmd is GET, READY if cmd is PUT and the list of available files if cmd is LIST
+			if(msg_send(cs,&smsg)!=smsg.length)
+				err_sys("send Respose failed,exit");
+		}
+		else {	
+			sprintf_s(resp.response, RESP_LENGTH,"File size:%ld",stat_buf.st_size );
+			memcpy(smsg.buffer,&resp,sizeof(resp));
+			// Send the file size if cmd is GET, READY if cmd is PUT and the list of available files if cmd is LIST
+			if(msg_send(cs,&smsg)!=smsg.length)
+				err_sys("send Respose failed,exit");
+
+			if(msg_recv(cs,&rmsg)!=rmsg.length)
 			err_sys("Receive Req error,exit");
 
-		if(strcmp(rmsg.buffer, "READY") == 0) {
-			// start sending the file
-			// TODO
+			if(strcmp(rmsg.buffer, "READY") == 0) {			
+				FILE * pFile;
+				pFile = fopen(reqp->filename,"rb");
+				if (pFile!=NULL){
+					
+					fseek (pFile , 0 , SEEK_END);
+					lSize = ftell (pFile);
+					rewind (pFile);
+					buffer = (char*) malloc (sizeof(char)*lSize);
+					
+					if (buffer != NULL){
+						result = fread (buffer,1,lSize,pFile);
+						if (result == lSize){
+							sprintf_s(resp.response, RESP_LENGTH, buffer);
+							memcpy(smsg.buffer, &resp,sizeof(resp));
+							//printf("\nContent is: \n%s", smsg.buffer);
+							if(msg_send(cs,&smsg)!=smsg.length)
+								err_sys("send Respose failed,exit");
+							
+							if(msg_recv(cs,&rmsg)!=rmsg.length)
+								err_sys("Receive Req error,exit");
+							printf("File sent to the client %s", "successfully!");
+							exit(0);
+
+
+						}
+						else{
+							printf("\nUnable to read from file: %s", reqp->filename);
+						}
+					}
+					else{
+						printf("\nUnable to allocate memory for file: %s", reqp->filename);
+					}
+											
+				}
+				else{
+					printf("\ncannot open file %s", reqp->filename);
+				}
+
+				// start sending the file
+				// TODO
+			}
 		}
 		break;
 	case REQ_PUT:
-			// Deal with size / receive the file
+		// Deal with size / receive the file
+		printf("User from %s will send file %s.", reqp->hostname, reqp->filename);
+		/*strcpy_s(smsg.buffer, BUFFER_LENGTH, "SERVER IS READY");
+		smsg.length = sizeof("SERVER IS READY");
+		if(msg_send(cs,&smsg)!=smsg.length)
+				err_sys("send Respose failed,exit");*/
+		
+		/*if(msg_recv(cs,&rmsg)!=rmsg.length)
+			err_sys("Receive Req error,exit");
+		if(strcmp(rmsg.buffer, "START SENDING") != 0) 
+			printf("\n%s\n", "Server is not ready.");*/
+		
+		smsg.type = RESP;
+		strcpy_s(smsg.buffer, BUFFER_LENGTH, "OK");
+		smsg.length = sizeof("OK");
+
+		if (msg_send(cs,&smsg) != sizeof("OK"))
+				err_sys("Sending req packet error.,exit");
+		
+		if(msg_recv(cs,&rmsg)!=rmsg.length)
+			err_sys("Receive Req error,exit");
+
+		printf("Server start receving file %s.", reqp->filename);			
+		FILE * pFile;
+		pFile = fopen(reqp->filename,"wb");
+		if (pFile!=NULL){
+			fputs(smsg.buffer, pFile);
+			fclose(pFile);
+			smsg.type = RESP;
+			strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
+			smsg.length = sizeof("Got the file");
+
+			if (msg_send(cs,&smsg) != sizeof("Got the file"))
+				err_sys("Sending req packet error.,exit");
+
+			printf("Finish downloading the file: %s", reqp->filename);
+
+		break;
+	case REQ_LIST:
+		smsg.type = RESP;
+		strcpy_s(smsg.buffer, BUFFER_LENGTH, "List files");
+		smsg.length = sizeof("List files");
+
+		if (msg_send(cs,&smsg) != sizeof("List files"))
+			err_sys("Sending req packet error.,exit");
+		if(msg_recv(cs,&rmsg)!=rmsg.length)
+			err_sys("Receive Req error,exit");
+		if(strcmp(rmsg.buffer, "READY") != 0) 
+			printf("\n%s\n", "Server is not ready.");
+		dir = opendir(".");
+		if(dir==NULL)
+			printf("Unable to open%s"," directory on the server");
+		while(pdir = readdir(dir)){
+			if(strstr(pdir->d_name,"txt")){
+				txtFile = pdir->d_name;
+				strcat(fileList, txtFile);
+				strcat(fileList, ",");
+				//cout<<pdir->d_name<<endl;
+			}
+		}
+		smsg.type = RESP;
+		strcpy_s(smsg.buffer, BUFFER_LENGTH, fileList);
+		smsg.length = sizeof(fileList);
+
+		if (msg_send(cs,&smsg) != sizeof(fileList))
+			err_sys("Sending req packet error.,exit");
+
 		break;
 	default:
 		break;
 	}
 
-	
+}	
 	closesocket(cs);
 }
 
