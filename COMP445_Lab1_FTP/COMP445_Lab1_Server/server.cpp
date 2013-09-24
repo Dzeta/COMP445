@@ -136,6 +136,20 @@ void TcpThread::run() //cs: Server socket
 	Msg smsg,rmsg; //send_message receive_message
 	struct _stat stat_buf;
     int result;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+	char buff[1024];
+	char str[1024];
+>>>>>>> 9e16d5e49f3202a8be66e058337974f49fa5e2a5
+>>>>>>> 70fe386c1828a6e1272c4c3f07ab1264246f89d4
+>>>>>>> 1e404ce21abb00c832fec2b6505f7a19e62c67dc
+>>>>>>> b76cc83bc93cad1a0db1f8020a78cb310d5f3b83
 	Type type;
 	DIR*     dir;
     dirent*  pdir;
@@ -177,6 +191,16 @@ void TcpThread::run() //cs: Server socket
 			if(msg_recv(cs,&rmsg)!=rmsg.length)
 			err_sys("Receive Req error,exit");
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 70fe386c1828a6e1272c4c3f07ab1264246f89d4
+>>>>>>> 1e404ce21abb00c832fec2b6505f7a19e62c67dc
+>>>>>>> b76cc83bc93cad1a0db1f8020a78cb310d5f3b83
 			if(strcmp(rmsg.buffer, "READY") == 0) {			
 				FILE * pFile;
 				pFile = fopen(reqp->filename,"rb");
@@ -219,6 +243,35 @@ void TcpThread::run() //cs: Server socket
 				// start sending the file
 				// TODO
 			}
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+=======
+		if(strcmp(rmsg.buffer, "READY") == 0) {			
+			FILE * pFile;
+			pFile = fopen(reqp->filename,"rb");
+			if (pFile!=NULL){
+				while(fgets(buff, 1024, pFile)!=NULL){
+					
+				}
+					memcpy(smsg.buffer, buff,sizeof(*buff));
+					
+					if(msg_send(cs,&smsg)!=smsg.length)
+						err_sys("send Respose failed,exit");				
+			}
+			else{
+				printf("\ncannot open file %s", reqp->filename);
+			}
+  
+			// start sending the file
+			// TODO
+>>>>>>> 9e16d5e49f3202a8be66e058337974f49fa5e2a5
+>>>>>>> 70fe386c1828a6e1272c4c3f07ab1264246f89d4
+>>>>>>> 1e404ce21abb00c832fec2b6505f7a19e62c67dc
+>>>>>>> b76cc83bc93cad1a0db1f8020a78cb310d5f3b83
 		}
 		break;
 	case REQ_PUT:
