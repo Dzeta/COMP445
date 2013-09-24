@@ -230,6 +230,7 @@ void TcpClient::run()
 			pFile = fopen(fileName,"wb");
 			if (pFile!=NULL){
 				fputs(respp->response, pFile);
+<<<<<<< HEAD
 				fclose(pFile);
 				smsg.type = RESP;
 				strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
@@ -240,6 +241,8 @@ void TcpClient::run()
 				
 				printf("Finish downloading the file: %s", fileName);
 				
+=======
+>>>>>>> 9e16d5e49f3202a8be66e058337974f49fa5e2a5
 			}
 			else{
 				printf("Cannot create file on client %s", fileName);
