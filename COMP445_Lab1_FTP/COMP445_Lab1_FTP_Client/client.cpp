@@ -67,7 +67,7 @@ void TcpClient::run()
 	char serverName[HOSTNAME_LENGTH];
 	char fileName[FILENAME_LENGTH];
 	char cmd[CMD_LENGTH];
-	char* buffer;
+	char buffer[BUFFER_LENGTH];
 	long lSize;
 	size_t fileSize;
 	int result;
@@ -89,7 +89,7 @@ void TcpClient::run()
 
 	do {
 
-		printf("\nType name of ftp server: ");
+		printf("\n\nType name of ftp server: ");
 		cin >> serverName;
 
 		if(strcmp(serverName, "quit") != 0) {
@@ -144,7 +144,7 @@ void TcpClient::run()
 			else if(strcmp(respp->response, "OK") == 0) 
 			{
 
-				printf("Start sending the file%sto server%s", fileName,serverName);
+				printf("Start sending the file %s to server %s\n", fileName,serverName);
 
 				FILE * pFile;
 				fopen_s(&pFile, fileName,"rb");
@@ -152,36 +152,45 @@ void TcpClient::run()
 					fseek (pFile , 0 , SEEK_END);
 					lSize = ftell (pFile);
 					rewind (pFile);
-					buffer = (char*) malloc (sizeof(char)*lSize);
 
-					if (buffer != NULL){
-						result = fread (buffer,1,lSize,pFile);
-						if (result == lSize){
-							smsg.type = RESP;
-							strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-							smsg.length = sizeof(buffer);
+					result = fread (buffer,1,BUFFER_LENGTH-1,pFile);
 
-							if (msg_send(sock,&smsg) != sizeof(buffer))
-								err_sys("Sending req packet error.,exit");
+					do {
+						buffer[BUFFER_LENGTH-1] = '\0';
 
-							if(msg_recv(sock,&rmsg)!=rmsg.length)
-								err_sys("Receive Req error,exit");
+						smsg.type = RESP;
+						strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+						smsg.length = sizeof(buffer);
 
-							respp=(Resp *)rmsg.buffer;
-							if(strcmp(respp->response, "Got the file") == 0) 
-								printf("File sent to the Server %s", "successfully!");
+						if (msg_send(sock,&smsg) != sizeof(buffer))
+							err_sys("Sending req packet error.,exit");
+					}while((result = fread (buffer,1,BUFFER_LENGTH-1,pFile)) == BUFFER_LENGTH-1);
+					
+					buffer[BUFFER_LENGTH-1] = '\0';
 
+					smsg.type = RESP;
+					strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+					smsg.length = sizeof(buffer);
 
-						}
-						else{
-							printf("\nUnable to read from file: %s", fileName);
-						}
-					}
-					else{
-						printf("\nUnable to allocate memory for file: %s", fileName);
-					}
+					if (msg_send(sock,&smsg) != sizeof(buffer))
+						err_sys("Sending req packet error.,exit");
 
+					fclose(pFile);
+
+					strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
+					smsg.length = sizeof("END");
+
+					if (msg_send(sock,&smsg) != sizeof("END"))
+						err_sys("Sending req packet error.,exit");
+
+					if(msg_recv(sock,&rmsg)!=rmsg.length)
+						err_sys("Receive Req error,exit");
+
+					respp=(Resp *)rmsg.buffer;
+					if(strcmp(respp->response, "Got the file") == 0) 
+						printf("File sent to the Server %s", "successfully!");
 				}
+
 				else{
 					printf("\ncannot open file %s", fileName);
 				}	
