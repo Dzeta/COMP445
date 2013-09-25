@@ -132,9 +132,10 @@ void TcpThread::run() //cs: Server socket
 	struct _stat stat_buf;
 	int result;
 	Type type;
-	char* buffer;
 	long lSize;
 	size_t fileSize;
+	char buffer[BUFFER_LENGTH];
+	char hostName[HOSTNAME_LENGTH] = "";
 	char fileName[FILENAME_LENGTH] = "";
 	char fileList[MAX_LIST_LENGTH] = {0};	
 	if(msg_recv(cs,&rmsg)!=rmsg.length)
@@ -151,79 +152,84 @@ void TcpThread::run() //cs: Server socket
 	switch (type)
 	{
 	case REQ_GET:
-		printf("User from %s requested file %s to be sent.", reqp->hostname, reqp->filename);
+		strcpy_s(fileName, FILENAME_LENGTH, reqp->filename);
+		strcpy_s(hostName, HOSTNAME_LENGTH, reqp->hostname);
+		printf("User from %s requested file %s to be sent.\n", hostName, fileName);
 
-		if((result = _stat(reqp->filename,&stat_buf))!=0){
+		if((result = _stat(fileName,&stat_buf))!=0){
 			sprintf_s(resp.response, RESP_LENGTH, "No such a file");
 			memcpy(smsg.buffer,&resp,sizeof(resp));
-			// Send the file size if cmd is GET, READY if cmd is PUT and the list of available files if cmd is LIST
+
 			if(msg_send(cs,&smsg)!=smsg.length)
 				err_sys("send Respose failed,exit");
 		}
 		else {	
-			sprintf_s(resp.response, RESP_LENGTH,"File size:%ld",stat_buf.st_size );
+			sprintf_s(resp.response, RESP_LENGTH,"READY" );
 			memcpy(smsg.buffer,&resp,sizeof(resp));
-			// Send the file size if cmd is GET, READY if cmd is PUT and the list of available files if cmd is LIST
+
 			if(msg_send(cs,&smsg)!=smsg.length)
 				err_sys("send Respose failed,exit");
 
 			if(msg_recv(cs,&rmsg)!=rmsg.length)
 				err_sys("Receive Req error,exit");
 
-			if(strcmp(rmsg.buffer, "READY") == 0) {			
-				FILE * pFile;
-				fopen_s(&pFile, reqp->filename,"rb");
-				if (pFile!=NULL){
+			if(strcmp(rmsg.buffer, "OK") == 0) {			
+				printf("Start sending the file %s to client %s\n", fileName,hostName);
 
+				FILE * pFile;
+				fopen_s(&pFile, fileName,"rb");
+				if (pFile!=NULL){
 					fseek (pFile , 0 , SEEK_END);
 					lSize = ftell (pFile);
 					rewind (pFile);
-					buffer = (char*) malloc (sizeof(char)*lSize);
 
-					if (buffer != NULL){
-						result = fread (buffer,1,lSize,pFile);
-						if (result == lSize){
-							sprintf_s(resp.response, RESP_LENGTH, buffer);
-							memcpy(smsg.buffer, &resp,sizeof(resp));
-							//printf("\nContent is: \n%s", smsg.buffer);
-							if(msg_send(cs,&smsg)!=smsg.length)
-								err_sys("send Respose failed,exit");
+					result = fread (buffer,1,BUFFER_LENGTH-1,pFile);
 
-							if(msg_recv(cs,&rmsg)!=rmsg.length)
-								err_sys("Receive Req error,exit");
-							printf("File sent to the client %s", "successfully!");
-						}
-						else{
-							printf("\nUnable to read from file: %s", reqp->filename);
-						}
-					}
-					else{
-						printf("\nUnable to allocate memory for file: %s", reqp->filename);
-					}
+					do {
+						buffer[BUFFER_LENGTH-1] = '\0';
 
+						smsg.type = RESP;
+						strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+						smsg.length = sizeof(buffer);
+
+						if (msg_send(cs,&smsg) != sizeof(buffer))
+							err_sys("Sending req packet error.,exit");
+					}while((result = fread (buffer,1,BUFFER_LENGTH-1,pFile)) == BUFFER_LENGTH-1);
+
+					buffer[BUFFER_LENGTH-1] = '\0';
+
+					smsg.type = RESP;
+					strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+					smsg.length = sizeof(buffer);
+
+					if (msg_send(cs,&smsg) != sizeof(buffer))
+						err_sys("Sending req packet error.,exit");
+
+					fclose(pFile);
+
+					strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
+					smsg.length = sizeof("END");
+
+					if (msg_send(cs,&smsg) != sizeof("END"))
+						err_sys("Sending req packet error.,exit");
+
+					if(msg_recv(cs,&rmsg)!=rmsg.length)
+						err_sys("Receive Req error,exit");
+
+					if(strcmp(rmsg.buffer, "Got the file") == 0) 
+						printf("File sent to the Client %s", "successfully!");
 				}
+
 				else{
-					printf("\ncannot open file %s", reqp->filename);
+					printf("\ncannot open file %s", fileName);
 				}
-
-				// start sending the file
-				// TODO
 			}
 		}
 		break;
 	case REQ_PUT:
 		strcpy_s(fileName, FILENAME_LENGTH, reqp->filename);
-		// Deal with size / receive the file
-		printf("User from %s will send file %s.\n", reqp->hostname, fileName);
-		/*strcpy_s(smsg.buffer, BUFFER_LENGTH, "SERVER IS READY");
-		smsg.length = sizeof("SERVER IS READY");
-		if(msg_send(cs,&smsg)!=smsg.length)
-		err_sys("send Respose failed,exit");*/
 
-		/*if(msg_recv(cs,&rmsg)!=rmsg.length)
-		err_sys("Receive Req error,exit");
-		if(strcmp(rmsg.buffer, "START SENDING") != 0) 
-		printf("\n%s\n", "Server is not ready.");*/
+		printf("User from %s will send file %s.\n", reqp->hostname, fileName);
 
 		smsg.type = RESP;
 		strcpy_s(smsg.buffer, BUFFER_LENGTH, "OK");
@@ -231,7 +237,6 @@ void TcpThread::run() //cs: Server socket
 
 		if (msg_send(cs,&smsg) != sizeof("OK"))
 			err_sys("Sending req packet error.,exit");
-
 
 		printf("Server start receving file %s\n", fileName);			
 		FILE * pFile;
@@ -243,7 +248,7 @@ void TcpThread::run() //cs: Server socket
 
 			while(strcmp(rmsg.buffer, "END") != 0) {
 				fwrite(rmsg.buffer, 1, sizeof(rmsg.buffer), pFile);
-				
+
 				if(msg_recv(cs,&rmsg)!=rmsg.length)
 					err_sys("Receive Req error,exit");
 			}
