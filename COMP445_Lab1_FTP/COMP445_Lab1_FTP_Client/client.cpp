@@ -57,7 +57,7 @@ public:
 	~TcpClient();
 	int msg_recv(int ,Msg * );
 	int msg_send(int ,Msg * );
-	unsigned long ResolveName(char name[]);
+	long ResolveName(char name[]);
 	void err_sys(char * fmt,...);
 
 };
@@ -95,183 +95,203 @@ void TcpClient::run()
 
 		if(strcmp(serverName, "quit") != 0) {
 
-			printf("\nType name of file to be transferred:  ");
-			cin >> fileName;
-
-			printf("\nType direction of transfer: ");
-			cin >> cmd;
-
-			strcpy_s(req.filename, FILENAME_LENGTH, fileName);
-
-			if(strcmp(cmd,"get")==0)
-				smsg.type=REQ_GET;
-			else if (strcmp(cmd,"put")==0)
-			{
-				smsg.type=REQ_PUT;
-
-				fopen_s(&pFile, fileName,"rb");
-				if(pFile == NULL) {
-					printf("\nCannot open file %s : the file might not exist, or you don't have the permissions to open it.", fileName);
-					smsg.type=REQ_CANCEL;
-				}
-			}
-			else if (strcmp(cmd,"list")==0)
-				smsg.type=REQ_LIST;
-			else err_sys("Wrong request type\n");
 			//Create the socket
 			if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) //create the socket 
 				err_sys("Socket Creating Error");
 
-			//connect to the server
-			ServPort=REQUEST_PORT;
-			memset(&ServAddr, 0, sizeof(ServAddr));     /* Zero out structure */
-			ServAddr.sin_family      = AF_INET;             /* Internet address family */
-			ServAddr.sin_addr.s_addr = ResolveName(serverName);   /* Server IP address */
-			ServAddr.sin_port        = htons(ServPort); /* Server port */
-			if (connect(sock, (struct sockaddr *) &ServAddr, sizeof(ServAddr)) < 0)
-				err_sys("Socket Creating Error");
-
-			//send out the message
-			memcpy(smsg.buffer,&req,sizeof(req)); //copy the request to the msg's buffer
-			smsg.length=sizeof(req);
-			if (msg_send(sock,&smsg) != sizeof(req))
-				err_sys("Sending req packet error.,exit");
-
-			if(smsg.type != REQ_CANCEL)
-				printf("\nSent request to %s, waiting...\n", serverName);
-
-			//receive the response
-			if(msg_recv(sock,&rmsg)!=rmsg.length)
-				err_sys("recv response error,exit");
-
-			//cast it to the response structure
-			respp=(Resp *)rmsg.buffer;
-
-			// File not found
-			if(strcmp(respp->response, "No such a file") == 0) 
-			{
-				// File does not exist
-				printf("\n%s\n", respp->response);
+			long ipAdr = ResolveName(serverName);
+			if(ipAdr == -1) {
+				printf("Unable to resolve server name.\n");
 			}
-			// PUT
-			else if(strcmp(respp->response, "OK") == 0) 
-			{
-				if (pFile!=NULL){
-					printf("Start sending the file %s to server %s\n", fileName,serverName);
+			else {
+				//connect to the server
+				ServPort=REQUEST_PORT;
+				memset(&ServAddr, 0, sizeof(ServAddr));     /* Zero out structure */
+				ServAddr.sin_family      = AF_INET;             /* Internet address family */
+				ServAddr.sin_addr.s_addr = ipAdr;   /* Server IP address */
+				ServAddr.sin_port        = htons(ServPort); /* Server port */
+				if (connect(sock, (struct sockaddr *) &ServAddr, sizeof(ServAddr)) < 0) {
+					printf("Failed to connect to server %s\n", serverName);
+				}
+				else {
 
-					fseek (pFile , 0 , SEEK_END);
-					lSize = ftell (pFile);
-					rewind (pFile);
+					printf("\nType name of file to be transferred:  ");
+					cin >> fileName;
 
-					result = fread (buffer,1,BUFFER_LENGTH-1,pFile);
-
+					boolean correctCmd = false;
 					do {
-						buffer[BUFFER_LENGTH-1] = '\0';
+					printf("\nType direction of transfer: ");
+					cin >> cmd;
+
+					strcpy_s(req.filename, FILENAME_LENGTH, fileName);
+
+					if(strcmp(cmd,"get")==0) {
+						smsg.type=REQ_GET;
+						correctCmd = true;
+					}
+					else if (strcmp(cmd,"put")==0)
+					{
+						smsg.type=REQ_PUT;
+						correctCmd = true;
+
+						fopen_s(&pFile, fileName,"rb");
+						if(pFile == NULL) {
+							printf("\nCannot open file %s : the file might not exist, or you don't have the permissions to open it.", fileName);
+							smsg.type=REQ_CANCEL;
+						}
+					}
+					else if (strcmp(cmd,"list")==0) {
+						smsg.type=REQ_LIST;
+						correctCmd = true;
+					}
+					else {
+						printf("Wrong request command.\nAvailable:\n \t\tget\n\t\tput\n\t\tlist");
+						correctCmd = false;
+					}
+					}while(!correctCmd);
+
+					//send out the message
+					memcpy(smsg.buffer,&req,sizeof(req)); //copy the request to the msg's buffer
+					smsg.length=sizeof(req);
+					if (msg_send(sock,&smsg) != sizeof(req))
+						err_sys("Sending req packet error.,exit");
+
+					if(smsg.type != REQ_CANCEL)
+						printf("\nSent request to %s, waiting...\n", serverName);
+
+					//receive the response
+					if(msg_recv(sock,&rmsg)!=rmsg.length)
+						err_sys("recv response error,exit");
+
+					//cast it to the response structure
+					respp=(Resp *)rmsg.buffer;
+
+					// File not found
+					if(strcmp(respp->response, "No such a file") == 0) 
+					{
+						// File does not exist
+						printf("\n%s\n", respp->response);
+					}
+					// PUT
+					else if(strcmp(respp->response, "OK") == 0) 
+					{
+						if (pFile!=NULL){
+							printf("Start sending the file %s to server %s\n", fileName,serverName);
+
+							fseek (pFile , 0 , SEEK_END);
+							lSize = ftell (pFile);
+							rewind (pFile);
+
+							result = fread (buffer,1,BUFFER_LENGTH-1,pFile);
+
+							do {
+								buffer[BUFFER_LENGTH-1] = '\0';
+
+								smsg.type = RESP;
+								strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+								smsg.length = sizeof(buffer);
+
+								if (msg_send(sock,&smsg) != sizeof(buffer))
+									err_sys("Sending req packet error.,exit");
+							}while((result = fread (buffer,1,BUFFER_LENGTH-1,pFile)) == BUFFER_LENGTH-1);
+
+							buffer[BUFFER_LENGTH-1] = '\0';
+
+							smsg.type = RESP;
+							strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+							smsg.length = sizeof(buffer);
+
+							if (msg_send(sock,&smsg) != sizeof(buffer))
+								err_sys("Sending req packet error.,exit");
+
+							fclose(pFile);
+							pFile = NULL;
+
+							strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
+							smsg.length = sizeof("END");
+
+							if (msg_send(sock,&smsg) != sizeof("END"))
+								err_sys("Sending req packet error.,exit");
+
+							if(msg_recv(sock,&rmsg)!=rmsg.length)
+								err_sys("Receive Req error,exit");
+
+							respp=(Resp *)rmsg.buffer;
+							if(strcmp(respp->response, "Got the file") == 0) 
+								printf("File sent to the Server %s", "successfully!");
+						}
+
+					} // END PUT
+
+					// LIST
+					else if(strcmp(respp->response, "List files") == 0){
+						smsg.type = RESP;
+						strcpy_s(smsg.buffer, BUFFER_LENGTH, "READY");
+						smsg.length = sizeof("READY");
+
+						if (msg_send(sock,&smsg) != sizeof("READY"))
+							err_sys("Sending req packet error.,exit");
+
+						// Start receiving the file
+						if(msg_recv(sock,&rmsg)!=rmsg.length)
+							err_sys("recv response error,exit");
+						printf("\nList all the files from server %s\n", serverName);
+						strcpy_s(resultSet, MAX_LIST_LENGTH, rmsg.buffer);
+						pch =strtok_s(resultSet, ",", &next_tok);
+						//cout<<resultSet<<endl;
+						while (pch != NULL)
+						{
+							printf ("\n%s",pch);
+							pch = strtok_s(NULL, ",", &next_tok);
+						}
+					} // END LIST
+
+					// GET
+					else if(strcmp(respp->response, "READY") == 0) 
+					{
+						printf("Retrieving file %s from %s.\n", fileName, serverName);
 
 						smsg.type = RESP;
-						strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-						smsg.length = sizeof(buffer);
+						strcpy_s(smsg.buffer, BUFFER_LENGTH, "OK");
+						smsg.length = sizeof("OK");
 
-						if (msg_send(sock,&smsg) != sizeof(buffer))
+						if (msg_send(sock,&smsg) != sizeof("OK"))
 							err_sys("Sending req packet error.,exit");
-					}while((result = fread (buffer,1,BUFFER_LENGTH-1,pFile)) == BUFFER_LENGTH-1);
 
-					buffer[BUFFER_LENGTH-1] = '\0';
+						printf("Client start receiving file %s\n", fileName);			
+						FILE * pFile;
+						fopen_s(&pFile, fileName,"wb");
+						if (pFile!=NULL){
 
-					smsg.type = RESP;
-					strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-					smsg.length = sizeof(buffer);
+							if(msg_recv(sock,&rmsg)!=rmsg.length)
+								err_sys("Receive Req error,exit");
 
-					if (msg_send(sock,&smsg) != sizeof(buffer))
-						err_sys("Sending req packet error.,exit");
+							while(strcmp(rmsg.buffer, "END") != 0) {
+								fwrite(rmsg.buffer, 1, sizeof(rmsg.buffer), pFile);
 
-					fclose(pFile);
-					pFile = NULL;
+								if(msg_recv(sock,&rmsg)!=rmsg.length)
+									err_sys("Receive Req error,exit");
+							}
 
-					strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
-					smsg.length = sizeof("END");
+							fclose(pFile);
+							pFile = NULL;
 
-					if (msg_send(sock,&smsg) != sizeof("END"))
-						err_sys("Sending req packet error.,exit");
+							smsg.type = RESP;
+							strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
+							smsg.length = sizeof("Got the file");
 
-					if(msg_recv(sock,&rmsg)!=rmsg.length)
-						err_sys("Receive Req error,exit");
+							if (msg_send(sock,&smsg) != sizeof("Got the file"))
+								err_sys("Sending req packet error.,exit");
 
-					respp=(Resp *)rmsg.buffer;
-					if(strcmp(respp->response, "Got the file") == 0) 
-						printf("File sent to the Server %s", "successfully!");
+							printf("Finish downloading the file: %s\n", fileName);
+						}
+
+					} // END GET
+
+					//close the client socket
+					closesocket(sock);
 				}
-
-			} // END PUT
-
-			// LIST
-			else if(strcmp(respp->response, "List files") == 0){
-				smsg.type = RESP;
-				strcpy_s(smsg.buffer, BUFFER_LENGTH, "READY");
-				smsg.length = sizeof("READY");
-
-				if (msg_send(sock,&smsg) != sizeof("READY"))
-					err_sys("Sending req packet error.,exit");
-
-				// Start receiving the file
-				if(msg_recv(sock,&rmsg)!=rmsg.length)
-					err_sys("recv response error,exit");
-				printf("\nList all the files from server %s\n", serverName);
-				strcpy_s(resultSet, MAX_LIST_LENGTH, rmsg.buffer);
-				pch =strtok_s(resultSet, ",", &next_tok);
-				//cout<<resultSet<<endl;
-				while (pch != NULL)
-				{
-					printf ("\n%s",pch);
-					pch = strtok_s(NULL, ",", &next_tok);
-				}
-			} // END LIST
-
-			// GET
-			else if(strcmp(respp->response, "READY") == 0) 
-			{
-				printf("Retrieving file %s from %s.\n", fileName, serverName);
-
-				smsg.type = RESP;
-				strcpy_s(smsg.buffer, BUFFER_LENGTH, "OK");
-				smsg.length = sizeof("OK");
-
-				if (msg_send(sock,&smsg) != sizeof("OK"))
-					err_sys("Sending req packet error.,exit");
-
-				printf("Client start receiving file %s\n", fileName);			
-				FILE * pFile;
-				fopen_s(&pFile, fileName,"wb");
-				if (pFile!=NULL){
-
-					if(msg_recv(sock,&rmsg)!=rmsg.length)
-						err_sys("Receive Req error,exit");
-
-					while(strcmp(rmsg.buffer, "END") != 0) {
-						fwrite(rmsg.buffer, 1, sizeof(rmsg.buffer), pFile);
-
-						if(msg_recv(sock,&rmsg)!=rmsg.length)
-							err_sys("Receive Req error,exit");
-					}
-
-					fclose(pFile);
-					pFile = NULL;
-
-					smsg.type = RESP;
-					strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
-					smsg.length = sizeof("Got the file");
-
-					if (msg_send(sock,&smsg) != sizeof("Got the file"))
-						err_sys("Sending req packet error.,exit");
-
-					printf("Finish downloading the file: %s\n", fileName);
-				}
-
-			} // END GET
-
-			//close the client socket
-			closesocket(sock);
-
+			}
 		} // END if severname = quit
 		else {
 			printf("\nClient closing...");
@@ -304,12 +324,12 @@ void TcpClient::err_sys(char * fmt,...) //from Richard Stevens's source code
 	exit(1);
 }
 
-unsigned long TcpClient::ResolveName(char name[])
+long TcpClient::ResolveName(char name[])
 {
 	struct hostent *host;            /* Structure containing host information */
 
 	if ((host = gethostbyname(name)) == NULL)
-		err_sys("gethostbyname() failed");
+		return -1;
 
 	/* Return the binary, network byte ordered address */
 	return *((unsigned long *) host->h_addr_list[0]);
