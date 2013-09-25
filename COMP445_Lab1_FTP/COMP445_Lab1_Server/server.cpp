@@ -13,7 +13,9 @@
 #include "Thread.h"
 #include "server.h"
 #include <vector>
+
 using namespace std;
+
 TcpServer::TcpServer()
 {
 	WSADATA wsadata;
@@ -128,18 +130,17 @@ void TcpThread::run() //cs: Server socket
 {
 	Resp resp;//response
 	Req * reqp; //a pointer to the Request Packet
-	Msg smsg,rmsg; //send_message receive_message
+
 	struct _stat stat_buf;
 	int result;
 	Type type;
-	long lSize;
-	size_t fileSize;
-	char buffer[BUFFER_LENGTH];
 	char hostName[HOSTNAME_LENGTH] = "";
 	char fileName[FILENAME_LENGTH] = "";
-	char fileList[MAX_LIST_LENGTH] = {0};	
+
 	if(msg_recv(cs,&rmsg)!=rmsg.length)
 		err_sys("Receive Req error,exit");
+
+	loader = new Load();
 
 	//cast it to the request packet structure		
 	reqp=(Req *)rmsg.buffer;	
@@ -174,52 +175,12 @@ void TcpThread::run() //cs: Server socket
 				err_sys("Receive Req error,exit");
 
 			if(strcmp(rmsg.buffer, "OK") == 0) {			
-				printf("Start sending the file %s to client %s\n", fileName,hostName);
 
 				FILE * pFile;
 				fopen_s(&pFile, fileName,"rb");
 				if (pFile!=NULL){
-					fseek (pFile , 0 , SEEK_END);
-					lSize = ftell (pFile);
-					rewind (pFile);
-
-					result = fread (buffer,1,BUFFER_LENGTH-1,pFile);
-
-					do {
-						buffer[BUFFER_LENGTH-1] = '\0';
-
-						smsg.type = RESP;
-						strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-						smsg.length = sizeof(buffer);
-
-						if (msg_send(cs,&smsg) != sizeof(buffer))
-							err_sys("Sending req packet error.,exit");
-					}while((result = fread (buffer,1,BUFFER_LENGTH-1,pFile)) == BUFFER_LENGTH-1);
-
-					buffer[BUFFER_LENGTH-1] = '\0';
-
-					smsg.type = RESP;
-					strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-					smsg.length = sizeof(buffer);
-
-					if (msg_send(cs,&smsg) != sizeof(buffer))
-						err_sys("Sending req packet error.,exit");
-
-					fclose(pFile);
-
-					strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
-					smsg.length = sizeof("END");
-
-					if (msg_send(cs,&smsg) != sizeof("END"))
-						err_sys("Sending req packet error.,exit");
-
-					if(msg_recv(cs,&rmsg)!=rmsg.length)
-						err_sys("Receive Req error,exit");
-
-					if(strcmp(rmsg.buffer, "Got the file") == 0) 
-						printf("File sent to the Client %s", "successfully!");
+					loader->sendFile(pFile, fileName, hostName, cs);
 				}
-
 				else{
 					printf("\ncannot open file %s", fileName);
 				}
@@ -229,40 +190,7 @@ void TcpThread::run() //cs: Server socket
 	case REQ_PUT:
 		strcpy_s(fileName, FILENAME_LENGTH, reqp->filename);
 
-		printf("User from %s will send file %s.\n", reqp->hostname, fileName);
-
-		smsg.type = RESP;
-		strcpy_s(smsg.buffer, BUFFER_LENGTH, "OK");
-		smsg.length = sizeof("OK");
-
-		if (msg_send(cs,&smsg) != sizeof("OK"))
-			err_sys("Sending req packet error.,exit");
-
-		printf("Server start receving file %s\n", fileName);			
-		FILE * pFile;
-		fopen_s(&pFile, fileName,"wb");
-		if (pFile!=NULL){
-
-			if(msg_recv(cs,&rmsg)!=rmsg.length)
-				err_sys("Receive Req error,exit");
-
-			while(strcmp(rmsg.buffer, "END") != 0) {
-				fwrite(rmsg.buffer, 1, sizeof(rmsg.buffer), pFile);
-
-				if(msg_recv(cs,&rmsg)!=rmsg.length)
-					err_sys("Receive Req error,exit");
-			}
-
-			fclose(pFile);
-			smsg.type = RESP;
-			strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
-			smsg.length = sizeof("Got the file");
-
-			if (msg_send(cs,&smsg) != sizeof("Got the file"))
-				err_sys("Sending req packet error.,exit");
-
-			printf("Finish downloading the file: %s\n", fileName);
-		}
+		loader->receiveFile(fileName, hostName, cs);
 
 		break;
 	case REQ_CANCEL:
@@ -274,54 +202,59 @@ void TcpThread::run() //cs: Server socket
 			err_sys("Sending req packet error.,exit");
 		break;
 	case REQ_LIST:
-		smsg.type = RESP;
-		strcpy_s(smsg.buffer, BUFFER_LENGTH, "List files");
-		smsg.length = sizeof("List files");
-
-		if (msg_send(cs,&smsg) != sizeof("List files"))
-			err_sys("Sending req packet error.,exit");
-		if(msg_recv(cs,&rmsg)!=rmsg.length)
-			err_sys("Receive Req error,exit");
-		if(strcmp(rmsg.buffer, "READY") != 0) 
-			printf("\n%s\n", "Server is not ready.");
-
-		WIN32_FIND_DATA search_data;
-		TCHAR currentDir[20];
-		StringCchCopy(currentDir, 15, TEXT(".\\*"));
-
-		memset(&search_data, 0, sizeof(WIN32_FIND_DATA));
-
-		HANDLE handle = FindFirstFile(currentDir, &search_data);
-
-		if(handle != INVALID_HANDLE_VALUE)
-		{
-			do {				
-				size_t i;
-				char *fName = (char*) malloc(FILENAME_LENGTH);
-				wcstombs_s(&i, fName, (size_t) FILENAME_LENGTH, search_data.cFileName, (size_t) FILENAME_LENGTH);
-
-				if(strstr(fName,"txt")){
-					strcat_s(fileList, MAX_LIST_LENGTH, fName);
-					strcat_s(fileList, MAX_LIST_LENGTH, ",");
-				}
-			}while (FindNextFile(handle, &search_data) != 0);
-		}
-
-		FindClose(handle);
-
-		smsg.type = RESP;
-		strcpy_s(smsg.buffer, BUFFER_LENGTH, fileList);
-		smsg.length = sizeof(fileList);
-
-		if (msg_send(cs,&smsg) != sizeof(fileList))
-			err_sys("Sending req packet error.,exit");
-
+		sendList();
 		break;
 	}
 
 	closesocket(cs);
 }
 
+void TcpThread::sendList() 
+{
+	char fileList[MAX_LIST_LENGTH] = "";	
+
+	smsg.type = RESP;
+	strcpy_s(smsg.buffer, BUFFER_LENGTH, "List files");
+	smsg.length = sizeof("List files");
+
+	if (msg_send(cs,&smsg) != sizeof("List files"))
+		err_sys("Sending req packet error.,exit");
+	if(msg_recv(cs,&rmsg)!=rmsg.length)
+		err_sys("Receive Req error,exit");
+	if(strcmp(rmsg.buffer, "READY") != 0) 
+		printf("\n%s\n", "Server is not ready.");
+
+	WIN32_FIND_DATA search_data;
+	TCHAR currentDir[20];
+	StringCchCopy(currentDir, 15, TEXT(".\\*"));
+
+	memset(&search_data, 0, sizeof(WIN32_FIND_DATA));
+
+	HANDLE handle = FindFirstFile(currentDir, &search_data);
+
+	if(handle != INVALID_HANDLE_VALUE)
+	{
+		do {				
+			size_t i;
+			char *fName = (char*) malloc(FILENAME_LENGTH);
+			wcstombs_s(&i, fName, (size_t) FILENAME_LENGTH, search_data.cFileName, (size_t) FILENAME_LENGTH);
+
+			if(strstr(fName,"txt")){
+				strcat_s(fileList, MAX_LIST_LENGTH, fName);
+				strcat_s(fileList, MAX_LIST_LENGTH, ",");
+			}
+		}while (FindNextFile(handle, &search_data) != 0);
+	}
+
+	FindClose(handle);
+
+	smsg.type = RESP;
+	strcpy_s(smsg.buffer, BUFFER_LENGTH, fileList);
+	smsg.length = sizeof(fileList);
+
+	if (msg_send(cs,&smsg) != sizeof(fileList))
+		err_sys("Sending req packet error.,exit");
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////

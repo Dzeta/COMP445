@@ -10,10 +10,7 @@
 #define MAXPENDING 10
 #define MSGHDRSIZE 8 //Message Header Size
 
-
-typedef enum{
-	REQ_GET=1,REQ_PUT,REQ_LIST,REQ_CANCEL,RESP  //Message type
-} Type;
+#include "Load.h"
 
 typedef struct  
 {
@@ -27,14 +24,6 @@ typedef struct
 } Resp; //response
 
 
-typedef struct 
-{
-	Type type;
-	int  length; //length of effective bytes in the buffer
-	char buffer[BUFFER_LENGTH];
-} Msg; //message format used for sending and receiving
-
-
 class TcpServer
 {
 	int serverSock,clientSock;     /* Socket descriptor for server and client*/
@@ -42,7 +31,7 @@ class TcpServer
 	struct sockaddr_in ServerAddr; /* Server address */
 	unsigned short ServerPort;     /* Server port */
 	int clientLen;            /* Length of Server address data structure */
-	char servername[HOSTNAME_LENGTH];
+	char servername[HOSTNAME_LENGTH];	
 
 public:
 	TcpServer();
@@ -52,7 +41,8 @@ public:
 
 class TcpThread :public Thread
 {
-
+	Load* loader;
+	Msg smsg,rmsg; //send_message receive_message7
 	int cs;
 public: 
 	TcpThread(int clientsocket):cs(clientsocket)
@@ -60,6 +50,7 @@ public:
 	virtual void run();
 	int msg_recv(int ,Msg * );
 	int msg_send(int ,Msg * );
+	void sendList();
 	unsigned long ResolveName(char name[]);
 	static void err_sys(char * fmt,...);
 };

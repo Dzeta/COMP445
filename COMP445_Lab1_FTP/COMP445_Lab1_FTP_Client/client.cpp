@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string.h>
 #include <windows.h>
+#include "Load.h"
 
 #define HOSTNAME_LENGTH 20
 #define RESP_LENGTH 40
@@ -18,10 +19,6 @@
 
 using namespace std;
 
-typedef enum{
-	REQ_GET=1,REQ_PUT,REQ_LIST,REQ_CANCEL,RESP //Message type
-} Type;
-
 typedef struct  
 {
 	char hostname[HOSTNAME_LENGTH];
@@ -34,14 +31,6 @@ typedef struct
 } Resp; //response
 
 
-typedef struct 
-{
-	Type type;
-	int  length; //length of effective bytes in the buffer
-	char buffer[BUFFER_LENGTH];
-} Msg; //message format used for sending and receiving
-
-
 class TcpClient
 {
 	int sock;                    /* Socket descriptor */
@@ -51,12 +40,15 @@ class TcpClient
 	Resp * respp;          /* pointer to response*/
 	Msg smsg,rmsg;               /* receive_message and send_message */
 	WSADATA wsadata;
+	Load* loader;
+
 public:
 	TcpClient(){}
 	void run();	
 	~TcpClient();
 	int msg_recv(int ,Msg * );
 	int msg_send(int ,Msg * );
+	void getList(char* );
 	long ResolveName(char name[]);
 	void err_sys(char * fmt,...);
 
@@ -67,14 +59,10 @@ void TcpClient::run()
 	char serverName[HOSTNAME_LENGTH];
 	char fileName[FILENAME_LENGTH];
 	char cmd[CMD_LENGTH];
-	char buffer[BUFFER_LENGTH];
-	long lSize;
-	size_t fileSize;
 	FILE * pFile = NULL;
-	int result;
-	char resultSet[MAX_LIST_LENGTH];
-	char* pch;
-	char* next_tok = NULL;
+
+	loader = new Load(); 
+
 	//initilize winsocket
 	if (WSAStartup(0x0202,&wsadata)!=0)
 	{  
@@ -120,34 +108,34 @@ void TcpClient::run()
 
 					boolean correctCmd = false;
 					do {
-					printf("\nType direction of transfer: ");
-					cin >> cmd;
+						printf("\nType direction of transfer: ");
+						cin >> cmd;
 
-					strcpy_s(req.filename, FILENAME_LENGTH, fileName);
+						strcpy_s(req.filename, FILENAME_LENGTH, fileName);
 
-					if(strcmp(cmd,"get")==0) {
-						smsg.type=REQ_GET;
-						correctCmd = true;
-					}
-					else if (strcmp(cmd,"put")==0)
-					{
-						smsg.type=REQ_PUT;
-						correctCmd = true;
-
-						fopen_s(&pFile, fileName,"rb");
-						if(pFile == NULL) {
-							printf("\nCannot open file %s : the file might not exist, or you don't have the permissions to open it.", fileName);
-							smsg.type=REQ_CANCEL;
+						if(strcmp(cmd,"get")==0) {
+							smsg.type=REQ_GET;
+							correctCmd = true;
 						}
-					}
-					else if (strcmp(cmd,"list")==0) {
-						smsg.type=REQ_LIST;
-						correctCmd = true;
-					}
-					else {
-						printf("Wrong request command.\nAvailable:\n \t\tget\n\t\tput\n\t\tlist");
-						correctCmd = false;
-					}
+						else if (strcmp(cmd,"put")==0)
+						{
+							smsg.type=REQ_PUT;
+							correctCmd = true;
+
+							fopen_s(&pFile, fileName,"rb");
+							if(pFile == NULL) {
+								printf("\nCannot open file %s : the file might not exist, or you don't have the permissions to open it.", fileName);
+								smsg.type=REQ_CANCEL;
+							}
+						}
+						else if (strcmp(cmd,"list")==0) {
+							smsg.type=REQ_LIST;
+							correctCmd = true;
+						}
+						else {
+							printf("Wrong request command.\nAvailable:\n \t\tget\n\t\tput\n\t\tlist");
+							correctCmd = false;
+						}
 					}while(!correctCmd);
 
 					//send out the message
@@ -176,117 +164,21 @@ void TcpClient::run()
 					else if(strcmp(respp->response, "OK") == 0) 
 					{
 						if (pFile!=NULL){
-							printf("Start sending the file %s to server %s\n", fileName,serverName);
-
-							fseek (pFile , 0 , SEEK_END);
-							lSize = ftell (pFile);
-							rewind (pFile);
-
-							result = fread (buffer,1,BUFFER_LENGTH-1,pFile);
-
-							do {
-								buffer[BUFFER_LENGTH-1] = '\0';
-
-								smsg.type = RESP;
-								strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-								smsg.length = sizeof(buffer);
-
-								if (msg_send(sock,&smsg) != sizeof(buffer))
-									err_sys("Sending req packet error.,exit");
-							}while((result = fread (buffer,1,BUFFER_LENGTH-1,pFile)) == BUFFER_LENGTH-1);
-
-							buffer[BUFFER_LENGTH-1] = '\0';
-
-							smsg.type = RESP;
-							strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-							smsg.length = sizeof(buffer);
-
-							if (msg_send(sock,&smsg) != sizeof(buffer))
-								err_sys("Sending req packet error.,exit");
-
-							fclose(pFile);
-							pFile = NULL;
-
-							strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
-							smsg.length = sizeof("END");
-
-							if (msg_send(sock,&smsg) != sizeof("END"))
-								err_sys("Sending req packet error.,exit");
-
-							if(msg_recv(sock,&rmsg)!=rmsg.length)
-								err_sys("Receive Req error,exit");
-
-							respp=(Resp *)rmsg.buffer;
-							if(strcmp(respp->response, "Got the file") == 0) 
-								printf("File sent to the Server %s", "successfully!");
+							loader->sendFile(pFile, fileName, serverName, sock);
 						}
 
 					} // END PUT
 
-					// LIST
-					else if(strcmp(respp->response, "List files") == 0){
-						smsg.type = RESP;
-						strcpy_s(smsg.buffer, BUFFER_LENGTH, "READY");
-						smsg.length = sizeof("READY");
-
-						if (msg_send(sock,&smsg) != sizeof("READY"))
-							err_sys("Sending req packet error.,exit");
-
-						// Start receiving the file
-						if(msg_recv(sock,&rmsg)!=rmsg.length)
-							err_sys("recv response error,exit");
-						printf("\nList all the files from server %s\n", serverName);
-						strcpy_s(resultSet, MAX_LIST_LENGTH, rmsg.buffer);
-						pch =strtok_s(resultSet, ",", &next_tok);
-						//cout<<resultSet<<endl;
-						while (pch != NULL)
-						{
-							printf ("\n%s",pch);
-							pch = strtok_s(NULL, ",", &next_tok);
-						}
-					} // END LIST
-
 					// GET
 					else if(strcmp(respp->response, "READY") == 0) 
 					{
-						printf("Retrieving file %s from %s.\n", fileName, serverName);
-
-						smsg.type = RESP;
-						strcpy_s(smsg.buffer, BUFFER_LENGTH, "OK");
-						smsg.length = sizeof("OK");
-
-						if (msg_send(sock,&smsg) != sizeof("OK"))
-							err_sys("Sending req packet error.,exit");
-
-						printf("Client start receiving file %s\n", fileName);			
-						FILE * pFile;
-						fopen_s(&pFile, fileName,"wb");
-						if (pFile!=NULL){
-
-							if(msg_recv(sock,&rmsg)!=rmsg.length)
-								err_sys("Receive Req error,exit");
-
-							while(strcmp(rmsg.buffer, "END") != 0) {
-								fwrite(rmsg.buffer, 1, sizeof(rmsg.buffer), pFile);
-
-								if(msg_recv(sock,&rmsg)!=rmsg.length)
-									err_sys("Receive Req error,exit");
-							}
-
-							fclose(pFile);
-							pFile = NULL;
-
-							smsg.type = RESP;
-							strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
-							smsg.length = sizeof("Got the file");
-
-							if (msg_send(sock,&smsg) != sizeof("Got the file"))
-								err_sys("Sending req packet error.,exit");
-
-							printf("Finish downloading the file: %s\n", fileName);
-						}
-
+						loader->receiveFile(fileName, serverName, sock);
 					} // END GET
+
+					// LIST
+					else if(strcmp(respp->response, "List files") == 0){
+						getList(serverName);
+					} // END LIST
 
 					//close the client socket
 					closesocket(sock);
@@ -303,6 +195,33 @@ void TcpClient::run()
 	}
 	while(strcmp(serverName, "quit") != 0);
 
+}
+
+void TcpClient::getList(char* serverName)
+{
+	char resultSet[MAX_LIST_LENGTH];
+	char* pch;
+	char* next_tok = NULL;
+
+	smsg.type = RESP;
+	strcpy_s(smsg.buffer, BUFFER_LENGTH, "READY");
+	smsg.length = sizeof("READY");
+
+	if (msg_send(sock,&smsg) != sizeof("READY"))
+		err_sys("Sending req packet error.,exit");
+
+	// Start receiving the file
+	if(msg_recv(sock,&rmsg)!=rmsg.length)
+		err_sys("recv response error,exit");
+	printf("\nList all the files from server %s\n", serverName);
+	strcpy_s(resultSet, MAX_LIST_LENGTH, rmsg.buffer);
+	pch =strtok_s(resultSet, ",", &next_tok);
+
+	while (pch != NULL)
+	{
+		printf ("\n%s",pch);
+		pch = strtok_s(NULL, ",", &next_tok);
+	}
 }
 
 TcpClient::~TcpClient()

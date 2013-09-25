@@ -78,10 +78,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Load.cpp" />
     <ClCompile Include="server.cpp" />
     <ClCompile Include="Thread.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Load.h" />
     <ClInclude Include="server.h" />
     <ClInclude Include="Thread.h" />
   </ItemGroup>

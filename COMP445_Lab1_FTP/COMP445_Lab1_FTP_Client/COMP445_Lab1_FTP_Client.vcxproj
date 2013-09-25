@@ -12,6 +12,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="client.cpp" />
+    <ClCompile Include="Load.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Load.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{E0A6F49F-197C-4D76-9D71-4213EFCDA8C4}</ProjectGuid>
