@@ -262,8 +262,17 @@ void TcpThread::run() //cs: Server socket
 				err_sys("Sending req packet error.,exit");
 
 			printf("Finish downloading the file: %s\n", fileName);
+		}
 
-			break;
+		break;
+	case REQ_CANCEL:
+		smsg.type = RESP;
+		strcpy_s(smsg.buffer, BUFFER_LENGTH, "CANCELED");
+		smsg.length = sizeof("CANCELED");
+
+		if (msg_send(cs,&smsg) != sizeof("CANCELED"))
+			err_sys("Sending req packet error.,exit");
+		break;
 	case REQ_LIST:
 		smsg.type = RESP;
 		strcpy_s(smsg.buffer, BUFFER_LENGTH, "List files");
@@ -308,9 +317,8 @@ void TcpThread::run() //cs: Server socket
 			err_sys("Sending req packet error.,exit");
 
 		break;
-		}
+	}
 
-	}	
 	closesocket(cs);
 }
 

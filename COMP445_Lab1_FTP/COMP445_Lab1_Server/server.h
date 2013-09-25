@@ -12,7 +12,7 @@
 
 
 typedef enum{
-	REQ_GET=1,REQ_PUT,REQ_LIST,RESP  //Message type
+	REQ_GET=1,REQ_PUT,REQ_LIST,REQ_CANCEL,RESP  //Message type
 } Type;
 
 typedef struct  

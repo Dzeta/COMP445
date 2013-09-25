@@ -19,7 +19,7 @@
 using namespace std;
 
 typedef enum{
-	REQ_GET=1,REQ_PUT,REQ_LIST,RESP //Message type
+	REQ_GET=1,REQ_PUT,REQ_LIST,REQ_CANCEL,RESP //Message type
 } Type;
 
 typedef struct  
@@ -70,6 +70,7 @@ void TcpClient::run()
 	char buffer[BUFFER_LENGTH];
 	long lSize;
 	size_t fileSize;
+	FILE * pFile = NULL;
 	int result;
 	char resultSet[MAX_LIST_LENGTH];
 	char* pch;
@@ -105,7 +106,15 @@ void TcpClient::run()
 			if(strcmp(cmd,"get")==0)
 				smsg.type=REQ_GET;
 			else if (strcmp(cmd,"put")==0)
+			{
 				smsg.type=REQ_PUT;
+
+				fopen_s(&pFile, fileName,"rb");
+				if(pFile == NULL) {
+					printf("\nCannot open file %s : the file might not exist, or you don't have the permissions to open it.", fileName);
+					smsg.type=REQ_CANCEL;
+				}
+			}
 			else if (strcmp(cmd,"list")==0)
 				smsg.type=REQ_LIST;
 			else err_sys("Wrong request type\n");
@@ -128,7 +137,8 @@ void TcpClient::run()
 			if (msg_send(sock,&smsg) != sizeof(req))
 				err_sys("Sending req packet error.,exit");
 
-			printf("\nSent request to %s, waiting...\n", serverName);
+			if(smsg.type != REQ_CANCEL)
+				printf("\nSent request to %s, waiting...\n", serverName);
 
 			//receive the response
 			if(msg_recv(sock,&rmsg)!=rmsg.length)
@@ -146,12 +156,9 @@ void TcpClient::run()
 			// PUT
 			else if(strcmp(respp->response, "OK") == 0) 
 			{
-
-				printf("Start sending the file %s to server %s\n", fileName,serverName);
-
-				FILE * pFile;
-				fopen_s(&pFile, fileName,"rb");
 				if (pFile!=NULL){
+					printf("Start sending the file %s to server %s\n", fileName,serverName);
+
 					fseek (pFile , 0 , SEEK_END);
 					lSize = ftell (pFile);
 					rewind (pFile);
@@ -179,6 +186,7 @@ void TcpClient::run()
 						err_sys("Sending req packet error.,exit");
 
 					fclose(pFile);
+					pFile = NULL;
 
 					strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
 					smsg.length = sizeof("END");
@@ -193,10 +201,6 @@ void TcpClient::run()
 					if(strcmp(respp->response, "Got the file") == 0) 
 						printf("File sent to the Server %s", "successfully!");
 				}
-
-				else{
-					printf("\ncannot open file %s", fileName);
-				}	
 
 			} // END PUT
 
@@ -251,6 +255,8 @@ void TcpClient::run()
 					}
 
 					fclose(pFile);
+					pFile = NULL;
+
 					smsg.type = RESP;
 					strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
 					smsg.length = sizeof("Got the file");
