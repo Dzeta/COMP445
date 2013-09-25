@@ -45,9 +45,9 @@ class TcpServer
 	char servername[HOSTNAME_LENGTH];
 
 public:
-		TcpServer();
-		~TcpServer();
-		void TcpServer::start();
+	TcpServer();
+	~TcpServer();
+	void TcpServer::start();
 };
 
 class TcpThread :public Thread
@@ -58,10 +58,10 @@ public:
 	TcpThread(int clientsocket):cs(clientsocket)
 	{}
 	virtual void run();
-    int msg_recv(int ,Msg * );
+	int msg_recv(int ,Msg * );
 	int msg_send(int ,Msg * );
 	unsigned long ResolveName(char name[]);
-    static void err_sys(char * fmt,...);
+	static void err_sys(char * fmt,...);
 };
 
 #endif

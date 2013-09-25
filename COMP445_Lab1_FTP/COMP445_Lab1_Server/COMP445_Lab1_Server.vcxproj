@@ -82,7 +82,6 @@
     <ClCompile Include="Thread.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="C:\Users\Admin\Downloads\dirent-1.13\include\dirent.h" />
     <ClInclude Include="server.h" />
     <ClInclude Include="Thread.h" />
   </ItemGroup>
