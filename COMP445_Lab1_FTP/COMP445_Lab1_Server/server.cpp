@@ -14,9 +14,10 @@ In the Server,issuse "Server sd2.encs.concordia.ca test.txt time" and you can ge
 #include <sys/stat.h>
 #include <stdio.h>
 #include <process.h>
+#include <tchar.h>
+#include <strsafe.h>
 #include "Thread.h"
 #include "server.h"
-#include <dirent.h>
 #include <vector>
 using namespace std;
 TcpServer::TcpServer()
@@ -136,31 +137,11 @@ void TcpThread::run() //cs: Server socket
 	Msg smsg,rmsg; //send_message receive_message
 	struct _stat stat_buf;
     int result;
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-	char buff[1024];
-	char str[1024];
->>>>>>> 9e16d5e49f3202a8be66e058337974f49fa5e2a5
->>>>>>> 70fe386c1828a6e1272c4c3f07ab1264246f89d4
->>>>>>> 1e404ce21abb00c832fec2b6505f7a19e62c67dc
->>>>>>> b76cc83bc93cad1a0db1f8020a78cb310d5f3b83
->>>>>>> cddca8bc0908209a1d1fb89bf3effb4c8c02fae0
 	Type type;
-	DIR*     dir;
-    dirent*  pdir;
 	char* buffer;
 	long lSize;
 	size_t fileSize;
-	char* txtFile;
-	char fileList[100] ={0};	
+	char fileList[MAX_LIST_LENGTH] = {0};	
 	if(msg_recv(cs,&rmsg)!=rmsg.length)
 		err_sys("Receive Req error,exit");
 
@@ -194,22 +175,9 @@ void TcpThread::run() //cs: Server socket
 			if(msg_recv(cs,&rmsg)!=rmsg.length)
 			err_sys("Receive Req error,exit");
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> 70fe386c1828a6e1272c4c3f07ab1264246f89d4
->>>>>>> 1e404ce21abb00c832fec2b6505f7a19e62c67dc
->>>>>>> b76cc83bc93cad1a0db1f8020a78cb310d5f3b83
->>>>>>> cddca8bc0908209a1d1fb89bf3effb4c8c02fae0
 			if(strcmp(rmsg.buffer, "READY") == 0) {			
 				FILE * pFile;
-				pFile = fopen(reqp->filename,"rb");
+				fopen_s(&pFile, reqp->filename,"rb");
 				if (pFile!=NULL){
 					
 					fseek (pFile , 0 , SEEK_END);
@@ -249,38 +217,6 @@ void TcpThread::run() //cs: Server socket
 				// start sending the file
 				// TODO
 			}
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-=======
-		if(strcmp(rmsg.buffer, "READY") == 0) {			
-			FILE * pFile;
-			pFile = fopen(reqp->filename,"rb");
-			if (pFile!=NULL){
-				while(fgets(buff, 1024, pFile)!=NULL){
-					
-				}
-					memcpy(smsg.buffer, buff,sizeof(*buff));
-					
-					if(msg_send(cs,&smsg)!=smsg.length)
-						err_sys("send Respose failed,exit");				
-			}
-			else{
-				printf("\ncannot open file %s", reqp->filename);
-			}
-  
-			// start sending the file
-			// TODO
->>>>>>> 9e16d5e49f3202a8be66e058337974f49fa5e2a5
->>>>>>> 70fe386c1828a6e1272c4c3f07ab1264246f89d4
->>>>>>> 1e404ce21abb00c832fec2b6505f7a19e62c67dc
->>>>>>> b76cc83bc93cad1a0db1f8020a78cb310d5f3b83
->>>>>>> cddca8bc0908209a1d1fb89bf3effb4c8c02fae0
 		}
 		break;
 	case REQ_PUT:
@@ -308,7 +244,7 @@ void TcpThread::run() //cs: Server socket
 
 		printf("Server start receving file %s.", reqp->filename);			
 		FILE * pFile;
-		pFile = fopen(reqp->filename,"wb");
+		fopen_s(&pFile, reqp->filename,"wb");
 		if (pFile!=NULL){
 			fputs(smsg.buffer, pFile);
 			fclose(pFile);
@@ -333,17 +269,32 @@ void TcpThread::run() //cs: Server socket
 			err_sys("Receive Req error,exit");
 		if(strcmp(rmsg.buffer, "READY") != 0) 
 			printf("\n%s\n", "Server is not ready.");
-		dir = opendir(".");
-		if(dir==NULL)
-			printf("Unable to open%s"," directory on the server");
-		while(pdir = readdir(dir)){
-			if(strstr(pdir->d_name,"txt")){
-				txtFile = pdir->d_name;
-				strcat(fileList, txtFile);
-				strcat(fileList, ",");
-				//cout<<pdir->d_name<<endl;
-			}
+
+		
+		WIN32_FIND_DATA search_data;
+		TCHAR currentDir[20];
+		StringCchCopy(currentDir, 15, TEXT(".\\*"));
+
+		memset(&search_data, 0, sizeof(WIN32_FIND_DATA));
+
+		HANDLE handle = FindFirstFile(currentDir, &search_data);
+
+		if(handle != INVALID_HANDLE_VALUE)
+		{
+			do {				
+				size_t i;
+				char *fName = (char*) malloc(FILENAME_LENGTH);
+				wcstombs_s(&i, fName, (size_t) FILENAME_LENGTH, search_data.cFileName, (size_t) FILENAME_LENGTH);
+					
+				if(strstr(fName,"txt")){
+					strcat_s(fileList, MAX_LIST_LENGTH, fName);
+					strcat_s(fileList, MAX_LIST_LENGTH, ",");
+				}
+			}while (FindNextFile(handle, &search_data) != 0);
 		}
+
+		FindClose(handle);
+
 		smsg.type = RESP;
 		strcpy_s(smsg.buffer, BUFFER_LENGTH, fileList);
 		smsg.length = sizeof(fileList);
@@ -351,8 +302,6 @@ void TcpThread::run() //cs: Server socket
 		if (msg_send(cs,&smsg) != sizeof(fileList))
 			err_sys("Sending req packet error.,exit");
 
-		break;
-	default:
 		break;
 	}
 
