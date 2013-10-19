@@ -1,9 +1,9 @@
 /**
- *		Lab Assignment 1 - COMP 445
- *
- *		Zuo Xiang ZHOU	- 9279148 
- *		FLEURY Gaetan	- 6380565
- *
+*		Lab Assignment 1 - COMP 445
+*
+*		Zuo Xiang ZHOU	- 9279148 
+*		FLEURY Gaetan	- 6380565
+*
 **/
 
 
@@ -248,10 +248,8 @@ void TcpThread::sendList()
 			char *fName = (char*) malloc(FILENAME_LENGTH);
 			wcstombs_s(&i, fName, (size_t) FILENAME_LENGTH, search_data.cFileName, (size_t) FILENAME_LENGTH);
 
-			if(strstr(fName,"txt")){
-				strcat_s(fileList, MAX_LIST_LENGTH, fName);
-				strcat_s(fileList, MAX_LIST_LENGTH, ",");
-			}
+			strcat_s(fileList, MAX_LIST_LENGTH, fName);
+			strcat_s(fileList, MAX_LIST_LENGTH, ",");
 		}while (FindNextFile(handle, &search_data) != 0);
 	}
 

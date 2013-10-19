@@ -1,9 +1,9 @@
 /**
- *		Lab Assignment 1 - COMP 445
- *
- *		Zuo Xiang ZHOU	- 9279148 
- *		FLEURY Gaetan	- 6380565
- *
+*		Lab Assignment 1 - COMP 445
+*
+*		Zuo Xiang ZHOU	- 9279148 
+*		FLEURY Gaetan	- 6380565
+*
 **/
 
 #pragma comment( linker, "/defaultlib:ws2_32.lib" )
@@ -111,15 +111,10 @@ void TcpClient::run()
 				}
 				else {
 
-					printf("\nType name of file to be transferred:  ");
-					cin >> fileName;
-
 					boolean correctCmd = false;
 					do {
-						printf("\nType direction of transfer: ");
+						printf("\nType the command you want to perform (get, put, list) : ");
 						cin >> cmd;
-
-						strcpy_s(req.filename, FILENAME_LENGTH, fileName);
 
 						if(strcmp(cmd,"get")==0) {
 							smsg.type=REQ_GET;
@@ -129,12 +124,6 @@ void TcpClient::run()
 						{
 							smsg.type=REQ_PUT;
 							correctCmd = true;
-
-							fopen_s(&pFile, fileName,"rb");
-							if(pFile == NULL) {
-								printf("\nCannot open file %s : the file might not exist, or you don't have the permissions to open it.", fileName);
-								smsg.type=REQ_CANCEL;
-							}
 						}
 						else if (strcmp(cmd,"list")==0) {
 							smsg.type=REQ_LIST;
@@ -145,6 +134,22 @@ void TcpClient::run()
 							correctCmd = false;
 						}
 					}while(!correctCmd);
+
+					if(smsg.type == REQ_PUT || smsg.type == REQ_GET) {
+						printf("\nType name of file to be transferred:  ");
+						cin >> fileName;
+
+						strcpy_s(req.filename, FILENAME_LENGTH, fileName);
+
+						if(smsg.type == REQ_PUT)
+						{
+							fopen_s(&pFile, fileName,"rb");
+							if(pFile == NULL) {
+								printf("\nCannot open file %s : the file might not exist, or you don't have the permissions to open it.", fileName);
+								smsg.type=REQ_CANCEL;
+							}
+						}
+					}
 
 					//send out the message
 					memcpy(smsg.buffer,&req,sizeof(req)); //copy the request to the msg's buffer
