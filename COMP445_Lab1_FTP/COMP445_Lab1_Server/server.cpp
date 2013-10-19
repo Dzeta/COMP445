@@ -1,3 +1,12 @@
+/**
+ *		Lab Assignment 1 - COMP 445
+ *
+ *		Zuo Xiang ZHOU	- 9279148 
+ *		FLEURY Gaetan	- 6380565
+ *
+**/
+
+
 #pragma comment( linker, "/defaultlib:ws2_32.lib" )
 
 #include <winsock.h>

@@ -1,42 +1,52 @@
+/**
+ *		Lab Assignment 1 - COMP 445
+ *
+ *		Zuo Xiang ZHOU	- 9279148 
+ *		FLEURY Gaetan	- 6380565
+ *
+**/
+
 #include "Load.h"
 
 void Load::sendFile(FILE* pFile, char* fileName, char* destName, int sock) {
 	long lSize = 0;
+	long sizeSent = 0;
 	int result = 0;
 
 	char buffer[BUFFER_LENGTH] = "";
-
-	printf("Start sending the file %s to %s\n", fileName,destName);
 
 	fseek (pFile , 0 , SEEK_END);
 	lSize = ftell (pFile);
 	rewind (pFile);
 
-	result = fread (buffer,1,BUFFER_LENGTH-1,pFile);
-
-	do {
-		buffer[BUFFER_LENGTH-1] = '\0';
-
-		smsg.type = RESP;
-		strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
-		smsg.length = sizeof(buffer);
-
-		if (msg_send(sock,&smsg) != sizeof(buffer))
-			err_sys("Sending req packet error.,exit");
-	}while((result = fread (buffer,1,BUFFER_LENGTH-1,pFile)) == BUFFER_LENGTH-1);
-
-	buffer[BUFFER_LENGTH-1] = '\0';
-
 	smsg.type = RESP;
-	strcpy_s(smsg.buffer, BUFFER_LENGTH, buffer);
+	sprintf_s(smsg.buffer, BUFFER_LENGTH, "%ld", lSize);
 	smsg.length = sizeof(buffer);
 
 	if (msg_send(sock,&smsg) != sizeof(buffer))
 		err_sys("Sending req packet error.,exit");
 
+	printf("Start sending the file %s to %s\n", fileName,destName);
+	while(sizeSent < lSize)
+	{
+		int toRead = (lSize - sizeSent < BUFFER_LENGTH) ? lSize - sizeSent : BUFFER_LENGTH;
+
+		fread (buffer,1,toRead,pFile);
+
+		smsg.type = RESP;
+		memcpy(smsg.buffer, buffer, BUFFER_LENGTH);
+		smsg.length = sizeof(buffer);
+
+		sizeSent += toRead;
+
+		if (msg_send(sock,&smsg) != sizeof(buffer))
+			err_sys("Sending req packet error.,exit");
+	}
+
 	fclose(pFile);
 	pFile = NULL;
 
+	smsg.type = RESP;
 	strcpy_s(smsg.buffer, BUFFER_LENGTH, "END");
 	smsg.length = sizeof("END");
 
@@ -47,7 +57,7 @@ void Load::sendFile(FILE* pFile, char* fileName, char* destName, int sock) {
 		err_sys("Receive Req error,exit");
 
 	if(strcmp(rmsg.buffer, "Got the file") == 0) 
-		printf("File sent to %s", "successfully!");
+		printf("File successfully sent to %s", destName);
 }
 
 void Load::receiveFile(char* fileName, char* sourceName, int sock) {
@@ -60,7 +70,14 @@ void Load::receiveFile(char* fileName, char* sourceName, int sock) {
 	if (msg_send(sock,&smsg) != sizeof("OK"))
 		err_sys("Sending req packet error.,exit");
 
-	printf("Client start receiving file %s\n", fileName);			
+	long lSize = 0;
+	long receiveSize = 0;
+
+	if(msg_recv(sock,&rmsg)!=rmsg.length)
+		err_sys("Receive Req error,exit");
+
+	lSize = atol(rmsg.buffer);
+
 	FILE * pFile;
 	fopen_s(&pFile, fileName,"wb");
 	if (pFile!=NULL){
@@ -68,8 +85,15 @@ void Load::receiveFile(char* fileName, char* sourceName, int sock) {
 		if(msg_recv(sock,&rmsg)!=rmsg.length)
 			err_sys("Receive Req error,exit");
 
-		while(strcmp(rmsg.buffer, "END") != 0) {
-			fwrite(rmsg.buffer, 1, sizeof(rmsg.buffer), pFile);
+		printf("First bytes of %s received\n", fileName);
+
+		while(receiveSize < lSize) {
+
+			int toWrite = (lSize - receiveSize < BUFFER_LENGTH) ? lSize - receiveSize : BUFFER_LENGTH;
+
+			fwrite(rmsg.buffer, 1, toWrite, pFile);
+
+			receiveSize += toWrite;
 
 			if(msg_recv(sock,&rmsg)!=rmsg.length)
 				err_sys("Receive Req error,exit");
@@ -78,14 +102,21 @@ void Load::receiveFile(char* fileName, char* sourceName, int sock) {
 		fclose(pFile);
 		pFile = NULL;
 
-		smsg.type = RESP;
-		strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
-		smsg.length = sizeof("Got the file");
+		if(strcmp(rmsg.buffer, "END") == 0)
+		{
+			smsg.type = RESP;
+			strcpy_s(smsg.buffer, BUFFER_LENGTH, "Got the file");
+			smsg.length = sizeof("Got the file");
 
-		if (msg_send(sock,&smsg) != sizeof("Got the file"))
-			err_sys("Sending req packet error.,exit");
+			if (msg_send(sock,&smsg) != sizeof("Got the file"))
+				err_sys("Sending req packet error.,exit");
 
-		printf("Finish downloading the file: %s\n", fileName);
+			printf("Finish downloading the file: %s\n", fileName);
+		}
+		else
+		{
+			printf("An error occured while receiving the file");
+		}
 	}
 
 }

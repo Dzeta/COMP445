@@ -21,7 +21,7 @@
     <ClCompile Include="Thread.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Load.cpp">
+    <ClCompile Include="..\Load\Load.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -32,7 +32,7 @@
     <ClInclude Include="Thread.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Load.h">
+    <ClInclude Include="..\Load\Load.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

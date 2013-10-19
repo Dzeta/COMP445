@@ -1,3 +1,12 @@
+/**
+ *		Lab Assignment 1 - COMP 445
+ *
+ *		Zuo Xiang ZHOU	- 9279148 
+ *		FLEURY Gaetan	- 6380565
+ *
+**/
+
+
 #include <winsock.h>
 #include <stdio.h>
 #include <iostream>

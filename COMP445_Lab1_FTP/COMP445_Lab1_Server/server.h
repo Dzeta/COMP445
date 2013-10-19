@@ -1,3 +1,12 @@
+/**
+ *		Lab Assignment 1 - COMP 445
+ *
+ *		Zuo Xiang ZHOU	- 9279148 
+ *		FLEURY Gaetan	- 6380565
+ *
+**/
+
+
 #ifndef SER_TCP_H
 #define SER_TCP_H
 
@@ -10,7 +19,7 @@
 #define MAXPENDING 10
 #define MSGHDRSIZE 8 //Message Header Size
 
-#include "Load.h"
+#include "../Load/Load.h"
 
 typedef struct  
 {

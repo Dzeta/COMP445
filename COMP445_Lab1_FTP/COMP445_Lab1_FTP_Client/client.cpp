@@ -1,3 +1,11 @@
+/**
+ *		Lab Assignment 1 - COMP 445
+ *
+ *		Zuo Xiang ZHOU	- 9279148 
+ *		FLEURY Gaetan	- 6380565
+ *
+**/
+
 #pragma comment( linker, "/defaultlib:ws2_32.lib" )
 
 #include <winsock.h>
@@ -5,7 +13,7 @@
 #include <iostream>
 #include <string.h>
 #include <windows.h>
-#include "Load.h"
+#include "../Load/Load.h"
 
 #define HOSTNAME_LENGTH 20
 #define RESP_LENGTH 40
